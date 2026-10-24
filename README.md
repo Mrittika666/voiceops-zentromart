@@ -15,3 +15,7 @@ Any other file name is treated as a separate single question.
 
 Outputs in the --out folder: <name>_reply.wav, results.json and results.csv
 (heard text, reply text, retrieved chunk IDs, tool calls).
+
+## Links
+- Report: https://github.com/Mrittika666/voiceops-zentromart/blob/main/report.pdf
+- Demo video (2 min): https://drive.google.com/file/d/12F0X-VCh-bkDZXXL8XtTa-RX8ic0tCe1/view?usp=sharing
