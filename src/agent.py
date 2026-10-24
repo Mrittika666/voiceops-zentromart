@@ -99,6 +99,7 @@ RULES
 - Do not say you do not know when the policy context contains the answer; read it carefully first.
 - Before saying any claim, return or replacement is approved, check the claim rules and value limits in the policy context against the item price in the order data. If the limit is exceeded or a human must decide, do NOT approve: set escalate=true.
 - If ORDER STATE says the order is verified, never ask for verification again.
+- If a general policy question is not covered by the POLICY CONTEXT, say you do not have that information and offer a human colleague. Do not ask for an order ID and do not guess.
 
 Return ONLY a JSON object: {{"reply": "...", "escalate": true or false, "ticket_summary": "issue, checks made, why a human is needed (empty if not escalating)"}}"""
 
@@ -174,7 +175,7 @@ class Agent:
 
         # 3) order state
         if not self.order_id:
-            st = "No order ID given yet. Ask ONLY for the order ID (one short question); do not ask for verification yet."
+            st = "No order ID given yet. If the question is a general policy question, answer it from the POLICY CONTEXT and do not ask for an order ID. Ask for the order ID (one short question, nothing else, no verification yet) only when the customer needs help with their own order."
         elif self.verified:
             o = {k: v for k, v in self.order.items() if v is not None}
             st = "Order verified. VERIFIED ORDER DATA: " + json.dumps(o, ensure_ascii=False, default=str)[:3500]
@@ -186,7 +187,13 @@ class Agent:
             st = f"Order {self.order_id} given but NOT verified yet. Ask for registered phone last 4 digits OR delivery pincode. Share no order details."
 
         # 4) RAG
-        ctx = self.kb.retrieve(" ".join(self.user_msgs[-3:]), k=5)
+        ctx, _seen = [], set()
+        _prev = (" ".join(self.user_msgs[-3:-1]) + " " + msg) if len(self.user_msgs) > 1 else None
+        for c in self.kb.retrieve(msg, k=4) + (self.kb.retrieve(_prev, k=3) if _prev else []):
+            _key = (c["file"], c["section_id"])
+            if _key not in _seen:
+                _seen.add(_key)
+                ctx.append(c)
         self.last_chunks = [c["section_id"] for c in ctx]
         context = "\n\n".join(f'[{c["section_id"]}] {c["text"]}' for c in ctx)
         turn = "FIRST reply: introduce yourself as an AI assistant." if not self.history else "follow-up: do NOT introduce yourself again."
@@ -204,6 +211,10 @@ class Agent:
                 summ = d.get("ticket_summary") or ""
             except Exception:
                 pass
+
+        # pehle reply mein AI ka zikr zaroori (code se pakka)
+        if not self.history and not re.search(r"\bAI\b|artificial intelligence", reply):
+            reply = "I am ZentroMart's AI assistant. " + reply
 
         # 5) handover: ticket code banata hai, claim tabhi jab created=True
         if esc and not self.ticket_id:
